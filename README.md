@@ -4,7 +4,7 @@ I am in the process of creating a collection of tools to automate PacBio data an
 
 As a corrolary to this project, I have generated a docker image that contains the PacBio CLI tools in a compatible linux environemt.  The Dockerfile is available in this repository. 
 
-![alt text](https://github.com/camccowan/PacBio-Tools/blob/master/limahgapprocess(1).png)
+![alt text](https://github.com/camccowan/PacBio-Tools/blob/master/limahgapprocess (1).png)
 
 
    
