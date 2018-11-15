@@ -24,22 +24,19 @@ workflow BAMtoUnicycler {
 
     call pbBAMtoFastq {
       #passes the file located at the array index, arrays are organized according to file names
-      input:
-             limaOutBAM = limaDemultiplexBarcodes.output_BAM[arrayIndex],
+      input: pbBAM = limaDemultiplexBarcodes.output_BAM[arrayIndex],
+             pbBAMindex = limaDemultiplexBarcodes.output_BAMIndex[arrayIndex],
              pacBioDocker = pacBioDocker
     }
-  }
-
-  #iterate over array index using scatter command
-  scatter(arrayIndex in range(length(limaDemultiplexBarcodes.output_BAM))) {
 
     call unicyclerAssembly {
       #passes the file located at the array index, arrays are organized according to file names
-      input: PacBiofastq = pbBAMtoFastq.PacBiofastq[arrayIndex]
+      input: PacBiofastq = pbBAMtoFastq.PacBiofastq
 
              #docker image is in the task block
     }
   }
+
 
   #final workflow output
   output {
@@ -89,7 +86,7 @@ task limaDemultiplexBarcodes {
     cpu: "4"
     memory: "10GB"
     disks: "local-disk " + disk_size + " HDD"
-    preemptible: select_first(["${preemptible_tries}", "3"])
+    preemptible: select_first([preemptible_tries, 3])
   }
 
   output {
@@ -102,7 +99,7 @@ task limaDemultiplexBarcodes {
     #generate arrays of files using the glob() function
     Array[File] limaOutputSubreadSets = glob("*_${outputPrefix}.subreadset.xml")
     Array[File] output_BAM = glob("*_${outputPrefix}.bam")
-    Array[File] output_BAMIndex = glob("*_$(outputPrefix).bam.pbi")
+    Array[File] output_BAMIndex = glob("*_${outputPrefix}.bam.pbi")
     #make sure to return packaged bam file
     File compressedBAM = "${inputBAM}.bam.tar.gz"
   }
@@ -112,28 +109,31 @@ task limaDemultiplexBarcodes {
 task pbBAMtoFastq {
 #the PacBio BAM format MUST be converted to a fastq.gz file before the Unicycler assembly step
   File pbBAM
+  File pbBAMindex
+  String projectName = basename(pbBAM, ".bam")
 
-  Int disk_size = ceil(((2*size(pbBAM, "GB")) + 20))
+  Int disk_size = ceil((2*size(pbBAM, "GB")) + 20)
   Int? preemptible_tries
+  String pacBioDocker
 
   command {
 
-    /PBtools/smrtcmds/bin/bam2fastq ${pbBAM}
+    /PBtools/smrtcmds/bin/bam2fastq -o "${projectName}" ${pbBAM}
 
   }
 
   runtime {
 
-    docker: "{pacBioDocker}"
+    docker: "${pacBioDocker}"
     cpu: "4"
     memory: "10GB"
     disks: "local-disk " + disk_size + " HDD"
-    preemptible: select_first(["${preemptible_tries}", "3"])
+    preemptible: select_first([preemptible_tries, 3])
   }
 
   output {
 
-    File PacBiofastq = "${*.fastq.gz}"
+    File PacBiofastq = "${projectName}.fastq.gz"
 
   }
 }
@@ -141,9 +141,8 @@ task pbBAMtoFastq {
 task unicyclerAssembly{
 
   #must be in fastq.gz format
+  #this will only work with one illumina supplied for the entire workflow.  Additional code will be needed to feed in an array of matching illumina files
   String assemblyName
-  String? R1
-  String? R2
   File? illuminaR1
   File? illuminaR2
   File PacBiofastq
@@ -152,7 +151,12 @@ task unicyclerAssembly{
   Int disk_size = ceil(size(PacBiofastq, "GB") + (2*size(illuminaR1)) + 20)
   Int? preemptible_tries
 
-  command { unicycler ${R1} ${illuminaR1} ${R2} ${illuminaR2} -l ${PacBiofastq} ${keepLevel}}
+  command {
+    unicycler ${"-1 " + illuminaR1} ${"-2 " + illuminaR2} -l ${PacBiofastq} ${keepLevel} -o ${assemblyName}
+    mv ${assemblyName}/assembly.fasta ${assemblyName}.fasta
+    mv ${assemblyName}/assembly.gfa ${assemblyName}.outGFA
+    mv ${assemblyName}/unicycler.log ${assemblyName}.unicycler.log
+  }
 
   runtime {
 
@@ -160,7 +164,7 @@ task unicyclerAssembly{
     memory:  "10GB"
     cpu:  "16"
     disks: "local-disk " + disk_size + " HDD"
-    preemptible: select_first(["${preemptible_tries}", "3"])
+    preemptible: select_first([preemptible_tries, 3])
 
   }
 
@@ -168,7 +172,7 @@ task unicyclerAssembly{
 
     File outFASTA = "${assemblyName}.fasta"
     File outGFA = "${assemblyName}.gfa"
-    File outLog = "unicycler.log"
+    File outLog = "${assemblyName}.unicycler.log"
 
 
   }
