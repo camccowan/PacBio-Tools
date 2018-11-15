@@ -33,7 +33,7 @@ workflow BAMtoUnicycler {
   #iterate over array index using scatter command
   scatter(arrayIndex in range(length(limaDemultiplexBarcodes.output_BAM))) {
 
-    call UnicyclerAssembly {
+    call unicyclerAssembly {
       #passes the file located at the array index, arrays are organized according to file names
       input: PacBiofastq = pbBAMtoFastq.PacBiofastq[arrayIndex]
 
@@ -89,7 +89,7 @@ task limaDemultiplexBarcodes {
     cpu: "4"
     memory: "10GB"
     disks: "local-disk " + disk_size + " HDD"
-    preemptible: select_first([preemptible_tries, 3])
+    preemptible: select_first(["${preemptible_tries}", "3"])
   }
 
   output {
@@ -113,9 +113,14 @@ task pbBAMtoFastq {
 #the PacBio BAM format MUST be converted to a fastq.gz file before the Unicycler assembly step
   File pbBAM
 
-  Int disk_size = ceil(((2*size(pbBAM, "GB")) + 20)
+  Int disk_size = ceil(((2*size(pbBAM, "GB")) + 20))
+  Int? preemptible_tries
 
-  command { /PBtools/smrtcmds/bin/bam2fastq ${pbBAM}}
+  command {
+
+    /PBtools/smrtcmds/bin/bam2fastq ${pbBAM}
+
+  }
 
   runtime {
 
@@ -123,7 +128,7 @@ task pbBAMtoFastq {
     cpu: "4"
     memory: "10GB"
     disks: "local-disk " + disk_size + " HDD"
-    preemptible: preemptible_tries
+    preemptible: select_first(["${preemptible_tries}", "3"])
   }
 
   output {
@@ -145,6 +150,7 @@ task unicyclerAssembly{
   String keepLevel
 
   Int disk_size = ceil(size(PacBiofastq, "GB") + (2*size(illuminaR1)) + 20)
+  Int? preemptible_tries
 
   command { unicycler ${R1} ${illuminaR1} ${R2} ${illuminaR2} -l ${PacBiofastq} ${keepLevel}}
 
@@ -154,7 +160,7 @@ task unicyclerAssembly{
     memory:  "10GB"
     cpu:  "16"
     disks: "local-disk " + disk_size + " HDD"
-    preemptible: preemptible_tries
+    preemptible: select_first(["${preemptible_tries}", "3"])
 
   }
 
