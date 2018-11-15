@@ -1,5 +1,5 @@
 ## WDL script to assemble a microbial de novo genome from PacBio using the Unicycler assembler
-## This WDL also supports the addition of short read data to create a hybrid assembly
+## This WDL also supports the addition of OPTIONAL short read data to create a hybrid assembly
 ## This requires the unicycler docker image from DockerHub --> docker pull nwflorek/unicycler
 
 workflow BAMtoUnicycler {
@@ -26,7 +26,6 @@ workflow BAMtoUnicycler {
       #passes the file located at the array index, arrays are organized according to file names
       input:
              limaOutBAM = limaDemultiplexBarcodes.output_BAM[arrayIndex],
-             #add in docker image
              pacBioDocker = pacBioDocker
     }
   }
@@ -42,8 +41,23 @@ workflow BAMtoUnicycler {
     }
   }
 
+  #final workflow output
+  output {
 
+    #Unicycler Outputs
+    Array[File] outputFASTAs = glob(unicyclerAssembly.outFASTA)
+    Array[File] outputGFAs = glob(unicyclerAssembly.outGFA)
+    Array[File] outputLogs = glob(unicyclerAssembly.outLog)
 
+    #Lima Reports
+    File lima_Report = limaDemultiplexBarcodes.lima_Report
+    File lima_Counts = limaDemultiplexBarcodes.lima_Counts
+
+    #Input as output
+    File origInputBAM = limaDemultiplexBarcodes.compressedBAM
+    Array[File] inputFastqs = glob(pbBAMtoFastq.PacBiofastq)
+
+  }
 }
 
 task limaDemultiplexBarcodes {
